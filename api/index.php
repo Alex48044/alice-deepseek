@@ -1,108 +1,71 @@
-<?php
-require 'vendor/autoload.php';
+﻿<?php
+require __DIR__ . '/../vendor/autoload.php';
 
 use Dotenv\Dotenv;
-use GuzzleHttp\Client;
 
-// Загрузка переменных окружения
-$dotenv = Dotenv::createImmutable(__DIR__);
+$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
-// Инициализация клиента DeepSeek
-$client = new Client([
-    'base_uri' => 'https://api.deepseek.com', // URL API DeepSeek
-    'timeout'  => 30.0,
-]);
+$apiKey = $_ENV['DEEPSEEK_API_KEY'] ?? getenv('DEEPSEEK_API_KEY');
 
-// Хранение состояния пользователей (можно заменить на базу данных)
-session_start();
-if (!isset($_SESSION['users_state'])) {
-    $_SESSION['users_state'] = [];
-}
-
-// Функция для очистки приветствия Алисы
-function cleanRequest($request) {
-    $cutWords = ['Алиса', 'алиса'];
-    foreach ($cutWords as $word) {
-        if (mb_stripos($request, $word) === 0) {
-            $request = mb_substr($request, mb_strlen($word));
-        }
-    }
-    return trim($request);
-}
-
-// Функция для взаимодействия с DeepSeek
-function askDeepSeek($message, $messages, $client) {
-    $apiKey = $_ENV['DEEPSEEK_API_KEY']; // Используем ключ DeepSeek
-    $allMessages = $messages;
-    $allMessages[] = $message;
-
-    $formattedMessages = [];
-    foreach ($allMessages as $msg) {
-        $formattedMessages[] = [
-            "role" => "user",
-            "content" => $msg
-        ];
-    }
-
-    try {
-        $response = $client->post('/v1/chat/completions', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-Type'  => 'application/json',
-            ],
-            'json' => [
-                'model' => 'deepseek-chat', // Указываем модель DeepSeek
-                'messages' => $formattedMessages,
-                'stream' => false // Потоковый вывод можно включить, если нужно
-            ],
-        ]);
-
-        $body = json_decode($response->getBody(), true);
-        return trim($body['choices'][0]['message']['content']);
-    } catch (Exception $e) {
-        error_log($e->getMessage());
-        return 'Не удалось получить ответ от сервиса.';
-    }
-}
-
-// Обработка POST-запроса
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $input = json_decode(file_get_contents('php://input'), true);
-
-    $response = [
-        'session' => $input['session'],
-        'version' => $input['version'],
-        'response' => [
-            'end_session' => false
-        ]
-    ];
-
-    $sessionId = $input['session']['session_id'];
-    if (!isset($_SESSION['users_state'][$sessionId])) {
-        $_SESSION['users_state'][$sessionId] = [
-            'messages' => []
-        ];
-    }
-
-    $userState = &$_SESSION['users_state'][$sessionId];
-
-    if (!empty($input['request']['original_utterance'])) {
-        $userMessage = cleanRequest($input['request']['original_utterance']);
-        $userState['messages'][] = $userMessage;
-
-        $botReply = askDeepSeek($userMessage, $userState['messages'], $client);
-        $response['response']['text'] = $botReply;
-        $response['response']['tts'] = $botReply . '<speaker audio="alice-sounds-things-door-2.opus">';
-    } else {
-        $response['response']['text'] = 'Я умный чат-бот. Спроси что-нибудь.';
-        $response['response']['tts'] = 'Я умный чат-бот. Спроси что-нибудь.';
-    }
-
+if (!$apiKey) {
     header('Content-Type: application/json');
-    echo json_encode($response, JSON_UNESCAPED_UNICODE);
-} else {
-    // Обработка других типов запросов, если необходимо
-    header("HTTP/1.1 405 Method Not Allowed");
-    echo "Метод не поддерживается.";
+    echo json_encode(['error' => 'API key not configured']);
+    exit;
 }
+
+$input = file_get_contents('php://input');
+$data = json_decode($input, true);
+
+if (!$data) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Invalid request']);
+    exit;
+}
+
+$message = $data['request']['command'] ?? '';
+
+if (empty($message)) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Empty request']);
+    exit;
+}
+
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://api.aitunnel.ru/v1/chat/completions');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Content-Type: application/json',
+    'Authorization: Bearer ' . $apiKey
+]);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+    'model' => 'deepseek-chat',
+    'messages' => [
+        ['role' => 'user', 'content' => $message]
+    ]
+]));
+
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+
+if ($httpCode !== 200) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'DeepSeek API error', 'code' => $httpCode]);
+    exit;
+}
+
+$result = json_decode($response, true);
+$answer = $result['choices'][0]['message']['content'] ?? 'Извините, не удалось получить ответ.';
+
+$output = [
+    'response' => [
+        'text' => $answer,
+        'end_session' => false
+    ],
+    'version' => '1.0'
+];
+
+header('Content-Type: application/json');
+echo json_encode($output, JSON_UNESCAPED_UNICODE);
