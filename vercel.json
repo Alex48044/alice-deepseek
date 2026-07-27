@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/index.php": {
-      "runtime": "php@8.2"
+      "runtime": "vercel-php@0.6.0"
     }
   },
   "routes": [
