@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require __DIR__ . '/../vendor/autoload.php';
 
 use Dotenv\Dotenv;
@@ -8,9 +8,10 @@ $dotenv->load();
 
 $apiKey = $_ENV['DEEPSEEK_API_KEY'] ?? getenv('DEEPSEEK_API_KEY');
 
-if (!$apiKey) {
-    header('Content-Type: application/json');
-    echo json_encode(['error' => 'API key not configured']);
+// Если это GET-запрос (просто открыли в браузере)
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Content-Type: text/plain');
+    echo "Навык DeepSeek работает! Отправляйте POST-запросы с данными от Алисы.";
     exit;
 }
 
