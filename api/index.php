@@ -19,19 +19,36 @@ $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
 if (!$data) {
+    // Возвращаем корректный ответ для Алисы
+    $output = [
+        'response' => [
+            'text' => 'Извините, я не понял запрос. Пожалуйста, попробуйте ещё раз.',
+            'end_session' => false
+        ],
+        'version' => '1.0'
+    ];
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'Invalid request']);
+    echo json_encode($output, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 $message = $data['request']['command'] ?? '';
 
+// Если команда пустая (например, первый запуск)
 if (empty($message)) {
+    $output = [
+        'response' => [
+            'text' => 'Здравствуйте! Я ваш юридический помощник с чувством юмора. Чем могу помочь?',
+            'end_session' => false
+        ],
+        'version' => '1.0'
+    ];
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'Empty request']);
+    echo json_encode($output, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
+// Отправка запроса к DeepSeek через AITUNNEL
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, 'https://api.aitunnel.ru/v1/chat/completions');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -52,8 +69,15 @@ $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 if ($httpCode !== 200) {
+    $output = [
+        'response' => [
+            'text' => 'Извините, сейчас я не могу ответить. Попробуйте позже.',
+            'end_session' => false
+        ],
+        'version' => '1.0'
+    ];
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'DeepSeek API error', 'code' => $httpCode]);
+    echo json_encode($output, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
