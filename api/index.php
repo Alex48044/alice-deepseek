@@ -8,21 +8,21 @@ $dotenv->load();
 
 $apiKey = $_ENV['DEEPSEEK_API_KEY'] ?? getenv('DEEPSEEK_API_KEY');
 
-// Если это GET-запрос (просто открыли в браузере)
+// GET-запрос (для проверки в браузере)
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     header('Content-Type: text/plain');
-    echo "Навык DeepSeek работает! Отправляйте POST-запросы с данными от Алисы.";
+    echo "Навык работает! Отправляйте POST-запросы от Алисы.";
     exit;
 }
 
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
+// Если данные не пришли — корректный ответ
 if (!$data) {
-    // Возвращаем корректный ответ для Алисы
     $output = [
         'response' => [
-            'text' => 'Извините, я не понял запрос. Пожалуйста, попробуйте ещё раз.',
+            'text' => 'Извините, я не понял запрос. Попробуйте ещё раз.',
             'end_session' => false
         ],
         'version' => '1.0'
@@ -34,7 +34,7 @@ if (!$data) {
 
 $message = $data['request']['command'] ?? '';
 
-// Если команда пустая (например, первый запуск)
+// Приветствие при первом запуске или пустом сообщении
 if (empty($message)) {
     $output = [
         'response' => [
@@ -48,7 +48,7 @@ if (empty($message)) {
     exit;
 }
 
-// Отправка запроса к DeepSeek через AITUNNEL
+// Запрос к AITUNNEL
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, 'https://api.aitunnel.ru/v1/chat/completions');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -66,7 +66,8 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+
+// curl_close() удалена — не нужна, PHP сам закроет
 
 if ($httpCode !== 200) {
     $output = [
