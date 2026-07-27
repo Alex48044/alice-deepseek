@@ -48,7 +48,7 @@ if (empty($message)) {
     exit;
 }
 
-// Запрос к AITUNNEL
+// Запрос к AITUNNEL с таймаутом 3 секунды
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, 'https://api.aitunnel.ru/v1/chat/completions');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -63,16 +63,18 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
         ['role' => 'user', 'content' => $message]
     ]
 ]));
+curl_setopt($ch, CURLOPT_TIMEOUT, 3); // <-- Таймаут 3 секунды
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
 // curl_close() удалена — не нужна, PHP сам закроет
 
-if ($httpCode !== 200) {
+// Проверяем, был ли таймаут или ошибка
+if ($response === false || $httpCode !== 200) {
     $output = [
         'response' => [
-            'text' => 'Извините, сейчас я не могу ответить. Попробуйте позже.',
+            'text' => 'Извините, я немного задумался. Повторите вопрос позже.',
             'end_session' => false
         ],
         'version' => '1.0'
